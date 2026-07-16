@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-j1bk.onrender.com';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-v2.onrender.com';
 
 class BackendService {
   private static _currentUserId: string | null = null;

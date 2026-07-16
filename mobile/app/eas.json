@@ -9,7 +9,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://securesign-backend-j1bk.onrender.com",
+        "EXPO_PUBLIC_BACKEND_URL": "https://securesign-backend-v2.onrender.com",
         "EXPO_PUBLIC_INSFORGE_URL": "https://vpgvqzpdvreylcujmmvu.supabase.co",
         "EXPO_PUBLIC_INSFORGE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwZ3ZxenBkdnJleWxjdWptbXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDgzMDcsImV4cCI6MjA5OTY4NDMwN30.g9BdeIRKkSRN86UJZ4k2v2FIhVThGk5TQN9ICFWTu3Y"
       }
@@ -19,7 +19,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://securesign-backend-j1bk.onrender.com",
+        "EXPO_PUBLIC_BACKEND_URL": "https://securesign-backend-v2.onrender.com",
         "EXPO_PUBLIC_INSFORGE_URL": "https://vpgvqzpdvreylcujmmvu.supabase.co",
         "EXPO_PUBLIC_INSFORGE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwZ3ZxenBkdnJleWxjdWptbXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMDgzMDcsImV4cCI6MjA5OTY4NDMwN30.g9BdeIRKkSRN86UJZ4k2v2FIhVThGk5TQN9ICFWTu3Y"
       }
