@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: securesign-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: SUPABASE_URL
+        value: https://edegjyajfyijslkpzrtd.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZWdqeWFqZnlpanNsa3B6cnRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTMzMDEsImV4cCI6MjA5OTc2OTMwMX0.Ble3G0H8tP4wc0A-ntBRODtINas9GSJYkxPejaRnf40
+      - key: SUPABASE_SERVICE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZWdqeWFqZnlpanNsa3B6cnRkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDE5MzMwMSwiZXhwIjoyMDk5NzY5MzAxfQ.sQdvai84Hq6UFBS7p__YpxBGPUN3e6SgtmWNiZbWPYI
+      - key: PORT
+        value: 3001

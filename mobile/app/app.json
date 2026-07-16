@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "SecureSign",
+    "slug": "dsc-mobile-signing",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "owner": "mahibujjipapas-team",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.securesign.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.securesign.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0ce87200-43b1-446c-af6c-9e87d801ba25"
+      }
+    }
+  }
+}
