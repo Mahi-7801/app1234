@@ -8,9 +8,10 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import DSCService from '../services/DSCService';
 import BackendService from '../services/BackendService';
+import SessionManager from '../services/SessionManager';
 
 /**
  * Sign Confirmation Screen - Final step before signing.
@@ -32,6 +33,21 @@ const SignConfirmationScreen = () => {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'confirm' | 'signing' | 'timestamping' | 'complete'>('confirm');
   const [signatureResult, setSignatureResult] = useState<any>(null);
+
+  // Check session validity when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check if session is still valid
+      if (!SessionManager.isSessionValid()) {
+        // Session expired - navigate to PIN entry for re-verification
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'PINEntry', params: { reVerify: true } }],
+        });
+        return;
+      }
+    }, [])
+  );
 
   const handleSign = async () => {
     setLoading(true);
@@ -256,7 +272,12 @@ const SignConfirmationScreen = () => {
               <TouchableOpacity
                 style={styles.finishButton}
                 onPress={() => {
-                  Alert.alert('Download', `Signed PDF available at:\n${assembleResult?.signedDocumentUrl || 'N/A'}`);
+                  // Navigate to secure document screen for PIN verification before download
+                  navigation.navigate('SecureDocument', {
+                    documentUrl: assembleResult?.signedDocumentUrl || '',
+                    documentName: document.name || 'Signed Document',
+                    documentType: 'PDF Document',
+                  });
                 }}
               >
                 <Text style={styles.finishButtonText}>Download Signed PDF</Text>

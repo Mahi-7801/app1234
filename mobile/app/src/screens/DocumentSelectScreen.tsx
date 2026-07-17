@@ -8,12 +8,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import DSCService from '../services/DSCService';
 import BackendService from '../services/BackendService';
+import SessionManager from '../services/SessionManager';
 
 /**
  * Document Select Screen - Choose a document to sign.
@@ -25,6 +26,23 @@ const DocumentSelectScreen = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
+
+  // Check session validity when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check if session is still valid
+      if (!SessionManager.isSessionValid()) {
+        // Session expired - navigate to PIN entry for re-verification
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'PINEntry', params: { reVerify: true } }],
+        });
+        return;
+      }
+
+      loadDocuments();
+    }, [])
+  );
 
   useEffect(() => {
     loadDocuments();

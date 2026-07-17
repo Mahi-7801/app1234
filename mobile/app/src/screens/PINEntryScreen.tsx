@@ -9,8 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import DSCService from '../services/DSCService';
+import SessionManager from '../services/SessionManager';
 
 /**
  * PIN Entry Screen - Secure PIN input for DSC authentication.
@@ -21,11 +22,15 @@ import DSCService from '../services/DSCService';
  */
 const PINEntryScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute();
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = 3;
   const pinInputRef = useRef<TextInput>(null);
+
+  // Check if this is a session re-verification (user returned from background)
+  const isReVerification = route.params?.reVerify === true;
 
   useEffect(() => {
     // Focus PIN input on mount
@@ -47,7 +52,16 @@ const PINEntryScreen = () => {
       setPin('');
 
       if (result) {
-        navigation.navigate('DocumentSelect');
+        // Validate the session after successful PIN verification
+        SessionManager.validateSession();
+        
+        // Navigate based on whether this is re-verification or initial verification
+        if (isReVerification) {
+          // Go back to the previous screen (DocumentSelect or SignConfirmation)
+          navigation.goBack();
+        } else {
+          navigation.navigate('DocumentSelect');
+        }
       } else {
         const remaining = maxAttempts - attempts - 1;
         setAttempts(attempts + 1);
@@ -89,7 +103,10 @@ const PINEntryScreen = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Enter PIN</Text>
         <Text style={styles.subtitle}>
-          Enter your DSC token PIN to authenticate
+          {isReVerification 
+            ? 'Session expired. Please re-enter your PIN to continue.'
+            : 'Enter your DSC token PIN to authenticate'
+          }
         </Text>
       </View>
 

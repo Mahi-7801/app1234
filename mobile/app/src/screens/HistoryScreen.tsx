@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import BackendService from '../services/BackendService';
+import SessionManager from '../services/SessionManager';
 
 const HistoryScreen = () => {
   const navigation = useNavigation<any>();
@@ -30,12 +31,25 @@ const HistoryScreen = () => {
         hash: d.document_hash || 'N/A',
         created: d.created_at?.split('T')[0] || '',
         status: d.document_hash ? 'Signed' : 'Pending',
+        signedUrl: d.signed_document_url || null,
       })));
     } catch (error: any) {
       setHistory([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewDocument = (item: any) => {
+    // Invalidate session to require PIN re-verification
+    SessionManager.invalidateSession();
+    
+    // Navigate to secure document screen
+    navigation.navigate('SecureDocument', {
+      documentUrl: item.signedUrl || '',
+      documentName: item.name,
+      documentType: 'Signed PDF Document',
+    });
   };
 
   const renderItem = ({ item }: { item: any }) => (
@@ -51,6 +65,15 @@ const HistoryScreen = () => {
       </View>
       <Text style={styles.cardMeta}>Date: {item.created}</Text>
       <Text style={styles.cardHash} numberOfLines={1}>Hash: {item.hash}</Text>
+      
+      {item.status === 'Signed' && (
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={() => handleViewDocument(item)}
+        >
+          <Text style={styles.viewButtonText}>View Signed Document</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -176,6 +199,18 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 4,
     fontFamily: 'monospace',
+  },
+  viewButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  viewButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

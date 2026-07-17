@@ -13,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import DSCService from '../services/DSCService';
 import BackendService from '../services/BackendService';
+import SessionManager from '../services/SessionManager';
 
 /**
  * Home Screen - Main entry point for the DSC signing app.
@@ -74,6 +75,8 @@ const HomeScreen = () => {
 
   const handleLogout = () => {
     BackendService.logout();
+    // Reset session on logout
+    SessionManager.resetSession();
     navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
   };
 
@@ -81,6 +84,9 @@ const HomeScreen = () => {
     setLoading(true);
     try {
       await DSCService.connectDevice(serialNumber);
+      // Invalidate session when starting a new signing flow
+      // This ensures PIN re-verification is required if user leaves the app
+      SessionManager.invalidateSession();
       navigation.navigate('PINEntry' as never);
     } catch (error: any) {
       Alert.alert('Connection Error', error.message || 'Failed to connect');

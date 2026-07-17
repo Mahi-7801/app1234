@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import SplashScreen from './src/screens/SplashScreen';
@@ -10,8 +10,10 @@ import HomeScreen from './src/screens/HomeScreen';
 import PINEntryScreen from './src/screens/PINEntryScreen';
 import DocumentSelectScreen from './src/screens/DocumentSelectScreen';
 import SignConfirmationScreen from './src/screens/SignConfirmationScreen';
+import SecureDocumentScreen from './src/screens/SecureDocumentScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import SessionManager from './src/services/SessionManager';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -72,6 +74,38 @@ function HomeTabs() {
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+
+  // Handle session invalidation - navigate to PIN entry
+  const handleSessionInvalidated = useCallback(() => {
+    if (navigationRef.current) {
+      const currentRoute = navigationRef.current.getCurrentRoute();
+      
+      // Only navigate if user is in a protected screen (not Login/Signup)
+      if (currentRoute && 
+          currentRoute.name !== 'Login' && 
+          currentRoute.name !== 'Signup' &&
+          currentRoute.name !== 'PINEntry') {
+        
+        // Navigate to PINEntry to re-verify
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'PINEntry' }],
+        });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Start session monitoring when app is ready
+    if (!showSplash) {
+      SessionManager.startMonitoring(handleSessionInvalidated);
+    }
+
+    return () => {
+      SessionManager.stopMonitoring();
+    };
+  }, [showSplash, handleSessionInvalidated]);
 
   if (showSplash) {
     return (
@@ -80,7 +114,7 @@ const App = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName="Login"
         screenOptions={{
@@ -118,6 +152,11 @@ const App = () => {
           name="SignConfirmation"
           component={SignConfirmationScreen}
           options={{ title: 'Confirm Signature' }}
+        />
+        <Stack.Screen
+          name="SecureDocument"
+          component={SecureDocumentScreen}
+          options={{ title: 'Access Document' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
