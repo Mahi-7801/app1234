@@ -108,19 +108,39 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(500).json({ error: 'Failed to create account' });
   }
 
-  // Insert into users table
-  const { data, error } = await supabase
+  // Wait briefly for the trigger to auto-create the profile
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Fetch the user profile (may have been auto-created by trigger)
+  let { data: userProfile } = await supabase
     .from('users')
-    .insert({ id: authData.user.id, email, full_name: full_name || '' })
-    .select()
+    .select('*')
+    .eq('id', authData.user.id)
     .single();
 
-  if (error) {
-    return res.status(500).json({ error: 'Failed to create user profile' });
+  // If trigger didn't create it, insert manually
+  if (!userProfile) {
+    const { data: inserted, error: insertErr } = await supabase
+      .from('users')
+      .insert({ id: authData.user.id, email, full_name: full_name || '' })
+      .select()
+      .single();
+
+    if (insertErr) {
+      // If insert also fails (e.g., race condition with trigger), just fetch again
+      const { data: retry } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+      userProfile = retry;
+    } else {
+      userProfile = inserted;
+    }
   }
 
   res.json({
-    user: data,
+    user: userProfile || { id: authData.user.id, email: authData.user.email },
     token: authData.session?.access_token || null,
   });
 });
