@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import DSCService from '../services/DSCService';
 import BackendService from '../services/BackendService';
 import SessionManager from '../services/SessionManager';
@@ -26,56 +26,83 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [connectedDevice, setConnectedDevice] = useState<string | null>(null);
   const [nativeModuleAvailable, setNativeModuleAvailable] = useState(true);
+  const [showDongleAlert, setShowDongleAlert] = useState(false);
+  const isMountedRef = useRef(true);
+
+  // Track if screen is focused to avoid showing alerts when navigating away
+  useFocusEffect(
+    React.useCallback(() => {
+      isMountedRef.current = true;
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     setNativeModuleAvailable(DSCService.isNativeModuleAvailable());
 
     if (DSCService.isNativeModuleAvailable()) {
-      scanForTokens();
+      // Delay scan to let USB permission settle
+      const scanTimeout = setTimeout(() => {
+        if (isMountedRef.current) {
+          scanForTokens();
+        }
+      }, 1500);
 
       // Listen for device connection events
       const connectListener = DSCService.onDeviceConnected((data: any) => {
-        setConnectedDevice(data.serialNumber);
-        Alert.alert('Device Connected', `Connected to: ${data.serialNumber}`);
+        if (isMountedRef.current) {
+          setConnectedDevice(data.serialNumber);
+          setShowDongleAlert(false);
+          Alert.alert('Device Connected', `Connected to: ${data.serialNumber}`);
+        }
       });
 
       const disconnectListener = DSCService.onDeviceDisconnected(() => {
-        setConnectedDevice(null);
-        Alert.alert('Device Disconnected', 'The DSC dongle has been disconnected.');
+        if (isMountedRef.current) {
+          setConnectedDevice(null);
+          Alert.alert('Device Disconnected', 'The DSC dongle has been disconnected.');
+        }
       });
 
       return () => {
+        clearTimeout(scanTimeout);
         connectListener?.remove();
         disconnectListener?.remove();
+        isMountedRef.current = false;
       };
     }
   }, []);
 
   const scanForTokens = async () => {
+    if (!isMountedRef.current) return;
+    
     setLoading(true);
     try {
       const foundTokens = await DSCService.listTokens();
+      if (!isMountedRef.current) return;
+      
       setTokens(foundTokens);
       if (foundTokens.length === 0) {
-        Alert.alert(
-          'Dongle Not Connected',
-          'No DSC dongle detected. Please connect your Type-C DSC dongle to proceed.',
-          [
-            { text: 'Retry', onPress: () => scanForTokens() },
-            { text: 'Logout', style: 'destructive', onPress: () => handleLogout() },
-          ]
-        );
+        setShowDongleAlert(true);
+      } else {
+        setShowDongleAlert(false);
       }
     } catch (error: any) {
-      Alert.alert('Scan Error', error.message || 'Failed to scan for tokens');
+      if (!isMountedRef.current) return;
+      // Don't show error alert - just show the dongle not connected state
+      setTokens([]);
+      setShowDongleAlert(true);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const handleLogout = () => {
     BackendService.logout();
-    // Reset session on logout
     SessionManager.resetSession();
     navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
   };
@@ -84,8 +111,6 @@ const HomeScreen = () => {
     setLoading(true);
     try {
       await DSCService.connectDevice(serialNumber);
-      // Invalidate session when starting a new signing flow
-      // This ensures PIN re-verification is required if user leaves the app
       SessionManager.invalidateSession();
       navigation.navigate('PINEntry' as never);
     } catch (error: any) {
@@ -93,6 +118,11 @@ const HomeScreen = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRetry = () => {
+    setShowDongleAlert(false);
+    scanForTokens();
   };
 
   const handleOpenDocs = async () => {
@@ -203,9 +233,13 @@ const HomeScreen = () => {
             </View>
           ) : (
             <View style={styles.noDevices}>
-              <Text style={styles.noDevicesText}>No DSC dongles detected.</Text>
+              <Text style={styles.noDevicesIcon}>🔌</Text>
+              <Text style={styles.noDevicesText}>No DSC dongles detected</Text>
               <Text style={styles.hint}>
-                Please connect a Type-C DSC dongle to your device.
+                Please connect a Type-C DSC dongle via USB OTG cable.
+              </Text>
+              <Text style={styles.hint}>
+                Make sure the dongle is properly plugged in and try scanning again.
               </Text>
             </View>
           )}
@@ -358,24 +392,34 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   noDevices: {
-    marginTop: 50,
+    marginTop: 30,
     alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+  },
+  noDevicesIcon: {
+    fontSize: 48,
+    marginBottom: 12,
   },
   noDevicesText: {
     fontSize: 18,
-    color: '#666',
+    color: '#333',
+    fontWeight: '600',
+    marginBottom: 8,
   },
   hint: {
     fontSize: 14,
-    color: '#999',
-    marginTop: 10,
+    color: '#666',
+    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
   },
   scanButton: {
     backgroundColor: '#007AFF',
     borderRadius: 12,
     padding: 16,
-    marginTop: 30,
+    marginTop: 20,
     alignItems: 'center',
   },
   scanButtonText: {

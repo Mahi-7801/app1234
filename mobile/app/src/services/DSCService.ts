@@ -17,6 +17,9 @@ const eventEmitter = DSCSigning ? new NativeEventEmitter(DSCSigning) : null;
 // Check if native module is available
 const NATIVE_MODULE_AVAILABLE = !!DSCSigning;
 
+// Log native module availability for debugging
+console.log('[DSCService] Native module available:', NATIVE_MODULE_AVAILABLE);
+
 class DSCService {
   /**
    * Check if native USB module is available
@@ -57,8 +60,12 @@ class DSCService {
     }
 
     try {
-      return await DSCSigning.listTokens();
+      console.log('[DSCService] Calling native listTokens...');
+      const result = await DSCSigning.listTokens();
+      console.log('[DSCService] Native listTokens result:', JSON.stringify(result));
+      return result;
     } catch (error: any) {
+      console.error('[DSCService] listTokens error:', error.message);
       throw new Error(error.message || 'Failed to scan for DSC tokens. Make sure your token is connected via USB OTG.');
     }
   }
