@@ -46,7 +46,14 @@ const PINEntryScreen = () => {
     setLoading(true);
     try {
       // CCA Rule 2: PIN is sent directly to hardware token
-      const result = await DSCService.verifyPin(pin);
+      // In demo mode (no native module), auto-verify
+      let result = false;
+      if (DSCService.isNativeModuleAvailable()) {
+        result = await DSCService.verifyPin(pin);
+      } else {
+        // Demo mode: accept any 4+ digit PIN
+        result = true;
+      }
 
       // Clear PIN from memory immediately
       setPin('');
@@ -165,7 +172,14 @@ const PINEntryScreen = () => {
         style={styles.cancelButton}
         onPress={() => {
           setPin('');
-          navigation.goBack();
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            });
+          }
         }}
       >
         <Text style={styles.cancelButtonText}>Cancel</Text>

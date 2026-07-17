@@ -295,6 +295,15 @@ const HomeScreen = () => {
               <Text style={styles.signButtonText}>Select Document to Sign</Text>
             </TouchableOpacity>
           )}
+
+          {!connectedDevice && !loading && tokens.length === 0 && (
+            <TouchableOpacity
+              style={[styles.signButton, { backgroundColor: '#FF9500' }]}
+              onPress={() => navigation.navigate('DocumentSelect' as never)}
+            >
+              <Text style={styles.signButtonText}>Demo Mode - Select Document</Text>
+            </TouchableOpacity>
+          )}
         </>
       )}
 

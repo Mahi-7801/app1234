@@ -31,6 +31,10 @@ class BackendService {
   private static _currentUserId: string | null = null;
   private static _authToken: string | null = null;
 
+  static getAuthToken(): string | null {
+    return BackendService._authToken;
+  }
+
   static setCurrentUserId(id: string | null) {
     BackendService._currentUserId = id;
   }

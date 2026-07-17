@@ -406,7 +406,7 @@ app.post('/api/assemble-signature', requireAuth, async (req, res) => {
 
   res.json({
     success: true,
-    signedDocumentUrl: `${req.protocol}://${req.get('host')}/signed-documents/${documentId}-signed-${Date.now()}.pdf`,
+    signedDocumentUrl: `https://${req.get('host')}/signed-documents/${documentId}-signed-${Date.now()}.pdf`,
     message: 'PAdES signature assembled successfully',
   });
 });

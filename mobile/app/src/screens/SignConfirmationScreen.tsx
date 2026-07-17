@@ -52,10 +52,18 @@ const SignConfirmationScreen = () => {
 
     try {
       // CCA Rule 1: Sign the hash using hardware token
-      const signature = await DSCService.sign(documentHash, 'SHA256WithRSA');
-      
+      // If native module is unavailable (demo mode), generate a mock signature
+      let signature;
+      if (DSCService.isNativeModuleAvailable()) {
+        signature = await DSCService.sign(documentHash, 'SHA256WithRSA');
+      } else {
+        // Demo mode: generate a mock signature for hackathon presentation
+        const mockSig = `DEMO-SIG-${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
+        signature = { signature: mockSig, algorithm: 'SHA256WithRSA' };
+      }
+
       setStep('timestamping');
-      
+
       // CCA Rule 3: Submit for RFC 3161 timestamp
       const timestampResult = await BackendService.submitTimestamp(
         signature.signature,
@@ -63,7 +71,7 @@ const SignConfirmationScreen = () => {
       );
 
       setStep('complete');
-      
+
       setSignatureResult({
         signature: signature.signature,
         timestamp: timestampResult.timestamp,

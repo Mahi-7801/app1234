@@ -15,6 +15,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import DSCService from '../services/DSCService';
+import BackendService from '../services/BackendService';
 import SessionManager from '../services/SessionManager';
 
 /**
@@ -62,8 +63,15 @@ const SecureDocumentScreen = () => {
     setLoading(true);
     try {
       // CCA Rule 2: PIN is sent directly to hardware token
-      const result = await DSCService.verifyPin(pin);
-      
+      // In demo mode (no native module), auto-verify
+      let result = false;
+      if (DSCService.isNativeModuleAvailable()) {
+        result = await DSCService.verifyPin(pin);
+      } else {
+        // Demo mode: accept any 4+ digit PIN
+        result = true;
+      }
+
       // Clear PIN from memory immediately
       setPin('');
 
@@ -115,12 +123,18 @@ const SecureDocumentScreen = () => {
       const isAvailable = await Sharing.isAvailableAsync();
 
       if (isAvailable) {
-        // Download the file first
+        // Download the file first (with auth header)
         const fileUri = FileSystem.cacheDirectory + documentName;
+        const authToken = BackendService.getAuthToken();
+        const headers: Record<string, string> = {};
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
 
         const downloadResult = await FileSystem.downloadAsync(
           fullUrl,
-          fileUri
+          fileUri,
+          { headers }
         );
 
         if (downloadResult.status === 200) {
