@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,62 +27,47 @@ const HomeScreen = () => {
   const [connectedDevice, setConnectedDevice] = useState<string | null>(null);
   const [nativeModuleAvailable, setNativeModuleAvailable] = useState(true);
   const [showDongleAlert, setShowDongleAlert] = useState(false);
-  const isMountedRef = useRef(true);
-
-  // Track if screen is focused to avoid showing alerts when navigating away
-  useFocusEffect(
-    React.useCallback(() => {
-      isMountedRef.current = true;
-      return () => {
-        isMountedRef.current = false;
-      };
-    }, [])
-  );
 
   useEffect(() => {
     setNativeModuleAvailable(DSCService.isNativeModuleAvailable());
+  }, []);
 
-    if (DSCService.isNativeModuleAvailable()) {
-      // Delay scan to let USB permission settle
-      const scanTimeout = setTimeout(() => {
-        if (isMountedRef.current) {
-          scanForTokens();
-        }
-      }, 1500);
+  // Only register USB listeners and scan when this screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!DSCService.isNativeModuleAvailable()) return;
+
+      let scanTimeout: ReturnType<typeof setTimeout>;
 
       // Listen for device connection events
       const connectListener = DSCService.onDeviceConnected((data: any) => {
-        if (isMountedRef.current) {
-          setConnectedDevice(data.serialNumber);
-          setShowDongleAlert(false);
-          Alert.alert('Device Connected', `Connected to: ${data.serialNumber}`);
-        }
+        setConnectedDevice(data.serialNumber);
+        setShowDongleAlert(false);
+        Alert.alert('Device Connected', `Connected to: ${data.serialNumber}`);
       });
 
       const disconnectListener = DSCService.onDeviceDisconnected(() => {
-        if (isMountedRef.current) {
-          setConnectedDevice(null);
-          Alert.alert('Device Disconnected', 'The DSC dongle has been disconnected.');
-        }
+        setConnectedDevice(null);
+        Alert.alert('Device Disconnected', 'The DSC dongle has been disconnected.');
       });
+
+      // Delay scan to let USB permission settle
+      scanTimeout = setTimeout(() => {
+        scanForTokens();
+      }, 1500);
 
       return () => {
         clearTimeout(scanTimeout);
         connectListener?.remove();
         disconnectListener?.remove();
-        isMountedRef.current = false;
       };
-    }
-  }, []);
+    }, [])
+  );
 
   const scanForTokens = async () => {
-    if (!isMountedRef.current) return;
-    
     setLoading(true);
     try {
       const foundTokens = await DSCService.listTokens();
-      if (!isMountedRef.current) return;
-      
       setTokens(foundTokens);
       if (foundTokens.length === 0) {
         setShowDongleAlert(true);
@@ -90,14 +75,10 @@ const HomeScreen = () => {
         setShowDongleAlert(false);
       }
     } catch (error: any) {
-      if (!isMountedRef.current) return;
-      // Don't show error alert - just show the dongle not connected state
       setTokens([]);
       setShowDongleAlert(true);
     } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
