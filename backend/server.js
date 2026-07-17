@@ -67,6 +67,39 @@ function isValidUUID(str) {
   return typeof str === 'string' && UUID_RE.test(str);
 }
 
+// ── Ensure user exists in users table ──
+async function ensureUserProfile(userId, email, fullName) {
+  // Check if profile exists
+  const { data: existing } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+
+  if (existing) return existing;
+
+  // Try to create it
+  const { data: inserted, error } = await supabase
+    .from('users')
+    .insert({ id: userId, email, full_name: fullName || '' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[ensureUserProfile] Insert failed:', error.message, error.details);
+    // Try one more time after a delay (trigger race condition)
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const { data: retry } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+    return retry;
+  }
+
+  return inserted;
+}
+
 // ── Health check ──
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'SecureSign Backend' });
@@ -86,7 +119,6 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  // Check if user already exists in users table
   const { data: existing } = await supabase
     .from('users')
     .select('*')
@@ -97,7 +129,6 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(409).json({ error: 'User with this email already exists' });
   }
 
-  // Create auth user
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,
@@ -108,35 +139,16 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(500).json({ error: 'Failed to create account' });
   }
 
-  const authUserId = authData.user.id;
-
-  // Poll for the trigger-created profile (up to 2 seconds)
+  // Ensure user profile exists (wait for trigger, then insert if needed)
   let userProfile = null;
-  for (let i = 0; i < 10; i++) {
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authUserId)
-      .single();
-    if (data) {
-      userProfile = data;
-      break;
-    }
+  for (let i = 0; i < 15; i++) {
+    userProfile = await ensureUserProfile(authData.user.id, email, full_name);
+    if (userProfile) break;
     await new Promise(resolve => setTimeout(resolve, 200));
   }
 
-  // If trigger didn't create it, insert manually
-  if (!userProfile) {
-    const { data: inserted } = await supabase
-      .from('users')
-      .insert({ id: authUserId, email, full_name: full_name || '' })
-      .select()
-      .single();
-    userProfile = inserted;
-  }
-
   res.json({
-    user: userProfile || { id: authUserId, email },
+    user: userProfile || { id: authData.user.id, email },
     token: authData.session?.access_token || null,
   });
 });
@@ -157,25 +169,11 @@ app.post('/api/login', rateLimit(60000, 15), async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  // Ensure user profile exists in users table
-  let { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', data.user.id)
-    .single();
-
-  if (!userProfile) {
-    // Create profile if it doesn't exist
-    const { data: inserted } = await supabase
-      .from('users')
-      .insert({ id: data.user.id, email: data.user.email, full_name: '' })
-      .select()
-      .single();
-    userProfile = inserted || { id: data.user.id, email: data.user.email };
-  }
+  // Ensure user profile exists
+  const userProfile = await ensureUserProfile(data.user.id, data.user.email, '');
 
   res.json({
-    user: userProfile,
+    user: userProfile || { id: data.user.id, email: data.user.email },
     token: data.session.access_token,
   });
 });
