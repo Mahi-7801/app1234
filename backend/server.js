@@ -78,26 +78,34 @@ async function ensureUserProfile(userId, email, fullName) {
 
   if (existing) return existing;
 
-  // Try to create it
-  const { data: inserted, error } = await supabase
+  // Try insert with full_name (mobile migration schema)
+  let { data: inserted, error } = await supabase
     .from('users')
     .insert({ id: userId, email, full_name: fullName || '' })
     .select()
     .single();
 
+  if (inserted) return inserted;
+
+  // Fallback: try insert without full_name (backend schema)
   if (error) {
-    console.error('[ensureUserProfile] Insert failed:', error.message, error.details);
-    // Try one more time after a delay (trigger race condition)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const { data: retry } = await supabase
+    console.error('[ensureUserProfile] First insert failed:', error.message);
+    const result = await supabase
       .from('users')
-      .select('id')
-      .eq('id', userId)
+      .insert({ id: userId, email })
+      .select()
       .single();
-    return retry;
+    if (result.data) return result.data;
+    console.error('[ensureUserProfile] Fallback insert also failed:', result.error?.message);
   }
 
-  return inserted;
+  // Final check
+  const { data: finalCheck } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+  return finalCheck;
 }
 
 // ── Health check ──
