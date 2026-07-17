@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,13 +26,11 @@ const DocumentSelectScreen = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const mountedRef = useRef(true);
 
-  // Check session validity when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Check if session is still valid
       if (!SessionManager.isSessionValid()) {
-        // Session expired - navigate to PIN entry for re-verification
         navigation.reset({
           index: 0,
           routes: [{ name: 'PINEntry', params: { reVerify: true } }],
@@ -41,17 +39,18 @@ const DocumentSelectScreen = () => {
       }
 
       loadDocuments();
+
+      return () => {
+        mountedRef.current = false;
+      };
     }, [])
   );
-
-  useEffect(() => {
-    loadDocuments();
-  }, []);
 
   const loadDocuments = async () => {
     setLoading(true);
     try {
       const docs = await BackendService.fetchDocuments();
+      if (!mountedRef.current) return;
       setDocuments(docs.map((d: any) => ({
         id: d.id,
         name: d.document_name,
@@ -62,17 +61,17 @@ const DocumentSelectScreen = () => {
         isLocal: false,
       })));
     } catch (error: any) {
-      console.warn('Backend unavailable, starting with empty list');
+      if (!mountedRef.current) return;
       setDocuments([]);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
   const handlePickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'],
         copyToCacheDirectory: true,
       });
 

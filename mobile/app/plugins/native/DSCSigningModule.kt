@@ -179,75 +179,55 @@ class DSCSigningModule(
     fun verifyPin(pin: String, promise: Promise) {
         try {
             val pinBytes = pin.toByteArray(Charsets.UTF_8)
-            val result = p11Wrapper?.verifyPin(pinBytes) ?: true
+            val result = p11Wrapper?.verifyPin(pinBytes) ?: false
             pinBytes.fill(0)
             promise.resolve(result)
         } catch (e: Exception) {
-            promise.resolve(true)
+            promise.reject("PIN_VERIFY_ERROR", "PIN verification failed: ${e.message}", e)
         }
     }
-    
+
     @ReactMethod
     fun getCertificate(promise: Promise) {
         try {
-            val certificate = try {
-                p11Wrapper?.getCertificate()
-            } catch (e: Exception) {
-                null
+            val certificate = p11Wrapper?.getCertificate()
+
+            if (certificate == null || certificate.isEmpty()) {
+                promise.reject("CERT_ERROR", "Failed to read certificate from token")
+                return
             }
-            
-            val certData = certificate ?: byteArrayOf(0x30, 0x82.toByte(), 0x01, 0x22)
-            
+
             promise.resolve(Arguments.createMap().apply {
-                putString("certificate", certData.joinToString("") { 
-                    String.format("%02X", it) 
+                putString("certificate", certificate.joinToString("") {
+                    String.format("%02X", it)
                 })
-                putInt("length", certData.size)
+                putInt("length", certificate.size)
             })
         } catch (e: Exception) {
-            val fallback = byteArrayOf(0x30, 0x82.toByte(), 0x01, 0x22)
-            promise.resolve(Arguments.createMap().apply {
-                putString("certificate", fallback.joinToString("") { 
-                    String.format("%02X", it) 
-                })
-                putInt("length", fallback.size)
-            })
+            promise.reject("CERT_ERROR", "Failed to get certificate: ${e.message}", e)
         }
     }
-    
+
     @ReactMethod
     fun sign(hash: String, algorithm: String, promise: Promise) {
         try {
             val hashBytes = hexStringToByteArray(hash.replace("SHA256:", ""))
-            
-            var signature = try {
-                p11Wrapper?.sign(hashBytes, SigningAlgorithm.SHA256WithRSA)
-            } catch (e: Exception) {
-                null
-            }
-            
+
+            val signature = p11Wrapper?.sign(hashBytes, SigningAlgorithm.SHA256WithRSA)
+
             if (signature == null || signature.isEmpty()) {
-                signature = hashBytes
+                promise.reject("SIGN_ERROR", "Signing failed - token returned empty signature")
+                return
             }
-            
+
             promise.resolve(Arguments.createMap().apply {
-                putString("signature", signature.joinToString("") { 
-                    String.format("%02X", it) 
+                putString("signature", signature.joinToString("") {
+                    String.format("%02X", it)
                 })
                 putInt("length", signature.size)
             })
         } catch (e: Exception) {
-            val hashBytes = try {
-                hexStringToByteArray(hash.replace("SHA256:", ""))
-            } catch (ex: Exception) {
-                hash.toByteArray()
-            }
-            promise.resolve(Arguments.createMap().apply {
-                putString("signature", hashBytes.joinToString("") { 
-                    String.format("%02X", it) 
-                })
-                putInt("length", hashBytes.size)
-            })
+            promise.reject("SIGN_ERROR", "Signing failed: ${e.message}", e)
         }
     }
     

@@ -17,41 +17,44 @@ const SplashScreen = ({ onAnimationEnd }: { onAnimationEnd: () => void }) => {
   const featuresOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      // Shield appears with bounce
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const animation = Animated.sequence([
       Animated.spring(shieldScale, {
         toValue: 1,
         friction: 4,
         tension: 40,
         useNativeDriver: true,
       }),
-      // Title fades in
       Animated.timing(titleOpacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }),
-      // Subtitle fades in
       Animated.timing(subtitleOpacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }),
-      // Tagline fades in
       Animated.timing(taglineOpacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }),
-      // Features fade in
       Animated.timing(featuresOpacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setTimeout(onAnimationEnd, 800);
+    ]);
+
+    animation.start(() => {
+      timeoutId = setTimeout(onAnimationEnd, 800);
     });
+
+    return () => {
+      animation.stop();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   return (

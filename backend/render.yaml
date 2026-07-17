@@ -7,10 +7,12 @@ services:
     startCommand: node server.js
     envVars:
       - key: SUPABASE_URL
-        value: https://edegjyajfyijslkpzrtd.supabase.co
+        sync: false
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZWdqeWFqZnlpanNsa3B6cnRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTMzMDEsImV4cCI6MjA5OTc2OTMwMX0.Ble3G0H8tP4wc0A-ntBRODtINas9GSJYkxPejaRnf40
+        sync: false
       - key: SUPABASE_SERVICE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZWdqeWFqZnlpanNsa3B6cnRkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDE5MzMwMSwiZXhwIjoyMDk5NzY5MzAxfQ.sQdvai84Hq6UFBS7p__YpxBGPUN3e6SgtmWNiZbWPYI
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://securesign-app.netlify.app
       - key: PORT
         value: 3001

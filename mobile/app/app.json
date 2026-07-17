@@ -6,17 +6,21 @@
     "orientation": "portrait",
     "owner": "mahibujjipapas-team",
     "userInterfaceStyle": "light",
+    "icon": "./assets/images/icon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.securesign.app"
+      "bundleIdentifier": "com.securesign.app",
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "icon": "./assets/images/android-icon.png",
       "package": "com.securesign.app"
     },
     "extra": {

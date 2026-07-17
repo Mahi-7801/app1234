@@ -5,50 +5,162 @@ const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['https://securesign-app.netlify.app'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+}));
+app.use(express.json({ limit: '5mb' }));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// ── Rate limiting (simple in-memory) ──
+const rateLimitMap = new Map();
+function rateLimit(windowMs = 60000, max = 30) {
+  return (req, res, next) => {
+    const key = req.ip;
+    const now = Date.now();
+    const entry = rateLimitMap.get(key) || { count: 0, resetAt: now + windowMs };
+    if (now > entry.resetAt) {
+      entry.count = 0;
+      entry.resetAt = now + windowMs;
+    }
+    entry.count++;
+    rateLimitMap.set(key, entry);
+    if (entry.count > max) {
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+    next();
+  };
+}
+
+// ── Auth middleware: validate Bearer token ──
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+  req.user = user;
+  next();
+}
+
+// ── UUID validation ──
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(str) {
+  return typeof str === 'string' && UUID_RE.test(str);
+}
+
 // ── Health check ──
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'SecureSign Backend' });
 });
 
-// ── Signup / Login: Insert or lookup user by email ──
-app.post('/api/signup', async (req, res) => {
-  const { id, email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email required' });
+// ── Signup ──
+app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
+  const { email, password, full_name } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
 
-  // Try to find existing user first
+  // Check if user already exists
   const { data: existing } = await supabase
     .from('users')
     .select('*')
     .eq('email', email)
     .single();
 
-  if (existing) return res.json({ user: existing });
+  if (existing) {
+    return res.status(409).json({ error: 'User with this email already exists' });
+  }
 
-  // New user — insert (DB generates UUID if no id provided)
-  const insertPayload = id ? { id, email } : { email };
+  // Create auth user
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: full_name || '' } },
+  });
+
+  if (authError) {
+    return res.status(500).json({ error: 'Failed to create account' });
+  }
+
+  // Insert into users table
   const { data, error } = await supabase
     .from('users')
-    .insert(insertPayload)
+    .insert({ id: authData.user.id, email, full_name: full_name || '' })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ user: data });
+  if (error) {
+    return res.status(500).json({ error: 'Failed to create user profile' });
+  }
+
+  res.json({
+    user: data,
+    token: authData.session?.access_token || null,
+  });
+});
+
+// ── Login ──
+app.post('/api/login', rateLimit(60000, 15), async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', data.user.id)
+    .single();
+
+  res.json({
+    user: userProfile || { id: data.user.id, email: data.user.email },
+    token: data.session.access_token,
+  });
 });
 
 // ── Documents: Upload ──
-app.post('/api/documents', async (req, res) => {
+app.post('/api/documents', requireAuth, async (req, res) => {
   const { user_id, document_name, document_hash, storage_path } = req.body;
   if (!user_id || !document_name || !document_hash) {
     return res.status(400).json({ error: 'user_id, document_name, document_hash required' });
+  }
+  if (user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot create documents for another user' });
   }
 
   const { data, error } = await supabase
@@ -57,51 +169,64 @@ app.post('/api/documents', async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to create document' });
   res.json(data);
 });
 
 // ── Documents: Hash ──
-app.post('/api/documents/:documentId/hash', async (req, res) => {
+app.post('/api/documents/:documentId/hash', requireAuth, async (req, res) => {
   const { documentId } = req.params;
+  if (!isValidUUID(documentId)) {
+    return res.status(400).json({ error: 'Invalid document ID format' });
+  }
 
   const { data: doc, error: fetchErr } = await supabase
     .from('documents')
-    .select('id, document_hash')
+    .select('id, document_hash, user_id')
     .eq('id', documentId)
     .single();
 
   if (fetchErr || !doc) return res.status(404).json({ error: 'Document not found' });
+  if (doc.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
 
-  let hash = doc.document_hash || crypto.createHash('sha256').update(documentId).digest('hex');
+  // Only compute hash if document doesn't already have one (immutability)
+  if (doc.document_hash) {
+    return res.json({ hash: 'SHA256:' + doc.document_hash.replace(/^SHA256:/, '') });
+  }
 
-  // Strip existing prefix before storing
-  const rawHash = hash.replace(/^SHA256:/, '');
-
+  const hash = crypto.createHash('sha256').update(documentId).digest('hex');
   const { error: updateErr } = await supabase
     .from('documents')
-    .update({ document_hash: rawHash })
+    .update({ document_hash: hash })
     .eq('id', documentId);
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
-  res.json({ hash: 'SHA256:' + rawHash });
+  if (updateErr) return res.status(500).json({ error: 'Failed to hash document' });
+  res.json({ hash: 'SHA256:' + hash });
 });
 
 // ── Documents: List by user ──
-app.get('/api/documents/:userId', async (req, res) => {
+app.get('/api/documents/:userId', requireAuth, async (req, res) => {
+  if (req.params.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   const { data, error } = await supabase
     .from('documents')
     .select('*')
     .eq('user_id', req.params.userId)
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to fetch documents' });
   res.json(data);
 });
 
 // ── Signing Sessions: Record ──
-app.post('/api/signing-sessions', async (req, res) => {
+app.post('/api/signing-sessions', requireAuth, async (req, res) => {
   const { user_id, document_id, certificate_serial_number, signed_hash, signature_blob, timestamp_token } = req.body;
+  if (user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot record sessions for another user' });
+  }
 
   const { data, error } = await supabase
     .from('signing_sessions')
@@ -117,41 +242,56 @@ app.post('/api/signing-sessions', async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to record session' });
   res.json(data);
 });
 
 // ── Audit Logs: Insert ──
-app.post('/api/audit-logs', async (req, res) => {
+app.post('/api/audit-logs', requireAuth, async (req, res) => {
   const { user_id, event_type, event_details } = req.body;
+  if (user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot log audit for another user' });
+  }
 
   const { data, error } = await supabase
     .from('audit_logs')
-    .insert({ user_id, event_type, event_details })
+    .insert({
+      user_id,
+      event_type,
+      event_details,
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'] || '',
+    })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to log audit' });
   res.json(data);
 });
 
 // ── Audit Logs: List by user ──
-app.get('/api/audit-logs/:userId', async (req, res) => {
+app.get('/api/audit-logs/:userId', requireAuth, async (req, res) => {
+  if (req.params.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   const { data, error } = await supabase
     .from('audit_logs')
     .select('*')
     .eq('user_id', req.params.userId)
     .order('timestamp', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to fetch audit logs' });
   res.json(data);
 });
 
 // ── Assemble PAdES Signature ──
-app.post('/api/assemble-signature', async (req, res) => {
+app.post('/api/assemble-signature', requireAuth, async (req, res) => {
   const { documentId, signature, timestamp, certificateSerial } = req.body;
   if (!documentId || !signature || !timestamp) {
     return res.status(400).json({ error: 'documentId, signature, and timestamp required' });
+  }
+  if (!isValidUUID(documentId)) {
+    return res.status(400).json({ error: 'Invalid document ID format' });
   }
 
   const signedDocPath = `/signed-documents/${documentId}-signed-${Date.now()}.pdf`;
@@ -169,10 +309,10 @@ app.post('/api/assemble-signature', async (req, res) => {
     .single();
 
   if (sessionError) {
-    // Session may not exist yet, create one
     const { error: insertErr } = await supabase
       .from('signing_sessions')
       .insert({
+        user_id: req.user.id,
         document_id: documentId,
         certificate_serial_number: certificateSerial || 'unknown',
         signed_hash: '',
@@ -180,7 +320,7 @@ app.post('/api/assemble-signature', async (req, res) => {
         timestamp_token: timestamp,
         completed_at: new Date().toISOString(),
       });
-    if (insertErr) return res.status(500).json({ error: insertErr.message });
+    if (insertErr) return res.status(500).json({ error: 'Failed to assemble signature' });
   }
 
   res.json({
@@ -191,14 +331,13 @@ app.post('/api/assemble-signature', async (req, res) => {
 });
 
 // ── Verify Signature ──
-app.post('/api/verify-signature', async (req, res) => {
+app.post('/api/verify-signature', requireAuth, async (req, res) => {
   const { documentId, signature, documentHash } = req.body;
   if (!documentId && !signature) {
     return res.status(400).json({ error: 'documentId or signature required' });
   }
 
   try {
-    // Look up the signing session
     const { data: session, error: fetchErr } = await supabase
       .from('signing_sessions')
       .select('*')
@@ -214,7 +353,6 @@ app.post('/api/verify-signature', async (req, res) => {
       });
     }
 
-    // Validate signature exists
     const hasSignature = !!session.signature_blob;
     const hasTimestamp = !!session.timestamp_token;
     const hasCert = !!session.certificate_serial_number;
@@ -229,19 +367,20 @@ app.post('/api/verify-signature', async (req, res) => {
       signedHash: session.signed_hash,
       signaturePresent: hasSignature,
       timestampPresent: hasTimestamp,
-      reason: valid ? 'Signature verified successfully' : 'Missing signature components',
+      reason: valid ? 'Signature components present' : 'Missing signature components',
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Verification failed' });
   }
 });
 
 // ── Get signing session by ID ──
-app.get('/api/signing-sessions/:sessionId', async (req, res) => {
+app.get('/api/signing-sessions/:sessionId', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('signing_sessions')
     .select('*')
     .eq('id', req.params.sessionId)
+    .eq('user_id', req.user.id)
     .single();
 
   if (error || !data) return res.status(404).json({ error: 'Session not found' });
@@ -249,14 +388,17 @@ app.get('/api/signing-sessions/:sessionId', async (req, res) => {
 });
 
 // ── Get all signing sessions for a user ──
-app.get('/api/signing-sessions/user/:userId', async (req, res) => {
+app.get('/api/signing-sessions/user/:userId', requireAuth, async (req, res) => {
+  if (req.params.userId !== req.user.id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   const { data, error } = await supabase
     .from('signing_sessions')
     .select('*')
     .eq('user_id', req.params.userId)
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: 'Failed to fetch sessions' });
   res.json(data);
 });
 

@@ -22,158 +22,109 @@ import BackendService from './BackendService';
  */
 const INJECTED_JAVASCRIPT = `
 (function() {
-  // Prevent multiple injections
   if (window.SignBridge) return;
 
-  /**
-   * window.SignBridge - Native signing interface for web apps.
-   * 
-   * CCA Rule 1: All operations delegate to hardware token.
-   * CCA Rule 2: PIN verification happens on token.
-   */
+  let _callbackCounter = 0;
+  window._signBridgeCallbacks = window._signBridgeCallbacks || {};
+
   window.SignBridge = {
-    /**
-     * Lists connected DSC dongles.
-     * @returns {Promise<Array>} Array of token info objects
-     */
     listTokens: function() {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'LIST_TOKENS',
-          id: Date.now()
+          id: id
         }));
-        
-        // Response handler will be set up by native bridge
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Connects to a DSC dongle.
-     * @param {string} serialNumber - Serial number of the dongle
-     * @returns {Promise<boolean>} Connection status
-     */
     connectDevice: function(serialNumber) {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'CONNECT_DEVICE',
           serialNumber: serialNumber,
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Verifies PIN on the hardware token.
-     * 
-     * CCA Rule 2: PIN is sent directly to hardware token.
-     * 
-     * @param {string} pin - User's PIN
-     * @returns {Promise<boolean>} Verification result
-     */
     verifyPin: function(pin) {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'VERIFY_PIN',
           pin: pin,
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Gets certificate from the token.
-     * 
-     * CCA Rule 1: Certificate retrieval does not expose private key.
-     * 
-     * @returns {Promise<Object>} Certificate info
-     */
     getCertificate: function() {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'GET_CERTIFICATE',
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Signs a document hash using the hardware token.
-     * 
-     * CCA Rule 1: Signing happens entirely on the hardware token.
-     * 
-     * @param {string} documentHash - Hash of the document to sign (hex)
-     * @param {string} algorithm - Signing algorithm (default: SHA256WithRSA)
-     * @returns {Promise<Object>} Signature object
-     */
     sign: function(documentHash, algorithm) {
       algorithm = algorithm || 'SHA256WithRSA';
-      
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'SIGN',
           documentHash: documentHash,
           algorithm: algorithm,
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Disconnects from the current device.
-     * @returns {Promise<boolean>} Disconnection status
-     */
     disconnect: function() {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'DISCONNECT',
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     },
 
-    /**
-     * Generates a document hash via the backend.
-     * 
-     * CCA Rule 3: Hash generation for signing.
-     * 
-     * @param {string} documentId - ID of the document to hash
-     * @returns {Promise<Object>} Hash result
-     */
     hashDocument: function(documentId) {
       return new Promise((resolve, reject) => {
+        const id = ++_callbackCounter;
+        window._signBridgeCallbacks[id] = { resolve, reject };
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'HASH_DOCUMENT',
           documentId: documentId,
-          id: Date.now()
+          id: id
         }));
-        
-        window._signBridgeCallbacks = window._signBridgeCallbacks || {};
-        window._signBridgeCallbacks[Date.now()] = { resolve, reject };
       });
     }
   };
 
-  // Notify web app that SignBridge is ready
+  window._handleSignBridgeResponse = function(data) {
+    const cb = window._signBridgeCallbacks[data.id];
+    if (cb) {
+      delete window._signBridgeCallbacks[data.id];
+      if (data.success) {
+        cb.resolve(data.result);
+      } else {
+        cb.reject(new Error(data.error || 'SignBridge operation failed'));
+      }
+    }
+  };
+
   window.dispatchEvent(new Event('SignBridgeReady'));
-  
-  console.log('[SignBridge] Native signing interface injected successfully');
 })();
 `;
 
@@ -263,6 +214,7 @@ export class WebViewBridge {
   private sendToWebView(data: any): void {
     this.webViewRef.current?.injectJavaScript(`
       window._handleSignBridgeResponse(${JSON.stringify(data)});
+      true;
     `);
   }
 }
@@ -293,18 +245,17 @@ export const TEST_HTML = `
   <div id="result">Ready...</div>
 
   <script>
-    // Response handler for SignBridge
     window._handleSignBridgeResponse = function(data) {
       const resultDiv = document.getElementById('result');
       if (data.success) {
-        resultDiv.innerHTML = '<span class="success">Success:</span> ' + 
-          JSON.stringify(data.result, null, 2);
+        resultDiv.textContent = 'Success: ' + JSON.stringify(data.result, null, 2);
+        resultDiv.className = 'success';
       } else {
-        resultDiv.innerHTML = '<span class="error">Error:</span> ' + data.error;
+        resultDiv.textContent = 'Error: ' + data.error;
+        resultDiv.className = 'error';
       }
     };
 
-    // Wait for SignBridge to be ready
     window.addEventListener('SignBridgeReady', function() {
       console.log('SignBridge is ready!');
     });
@@ -312,22 +263,22 @@ export const TEST_HTML = `
     async function testListTokens() {
       try {
         const tokens = await window.SignBridge.listTokens();
-        document.getElementById('result').innerHTML = 
-          '<span class="success">Tokens found:</span> ' + JSON.stringify(tokens);
+        document.getElementById('result').textContent = 'Tokens found: ' + JSON.stringify(tokens);
+        document.getElementById('result').className = 'success';
       } catch (e) {
-        document.getElementById('result').innerHTML = 
-          '<span class="error">Error:</span> ' + e.message;
+        document.getElementById('result').textContent = 'Error: ' + e.message;
+        document.getElementById('result').className = 'error';
       }
     }
 
     async function testGetCertificate() {
       try {
         const cert = await window.SignBridge.getCertificate();
-        document.getElementById('result').innerHTML = 
-          '<span class="success">Certificate:</span> ' + JSON.stringify(cert);
+        document.getElementById('result').textContent = 'Certificate: ' + JSON.stringify(cert);
+        document.getElementById('result').className = 'success';
       } catch (e) {
-        document.getElementById('result').innerHTML = 
-          '<span class="error">Error:</span> ' + e.message;
+        document.getElementById('result').textContent = 'Error: ' + e.message;
+        document.getElementById('result').className = 'error';
       }
     }
 
@@ -335,11 +286,11 @@ export const TEST_HTML = `
       try {
         const testHash = 'a1b2c3d4e5f67890';
         const signature = await window.SignBridge.sign(testHash, 'SHA256WithRSA');
-        document.getElementById('result').innerHTML = 
-          '<span class="success">Signature:</span> ' + JSON.stringify(signature);
+        document.getElementById('result').textContent = 'Signature: ' + JSON.stringify(signature);
+        document.getElementById('result').className = 'success';
       } catch (e) {
-        document.getElementById('result').innerHTML = 
-          '<span class="error">Error:</span> ' + e.message;
+        document.getElementById('result').textContent = 'Error: ' + e.message;
+        document.getElementById('result').className = 'error';
       }
     }
   </script>

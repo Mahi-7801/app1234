@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,28 +15,31 @@ const HistoryScreen = () => {
   const navigation = useNavigation<any>();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     loadHistory();
+    return () => { mountedRef.current = false; };
   }, []);
 
   const loadHistory = async () => {
     setLoading(true);
     try {
       const docs = await BackendService.fetchDocuments();
+      if (!mountedRef.current) return;
       const signedDocs = docs.filter((d: any) => d.document_hash);
       setHistory(signedDocs.map((d: any) => ({
         id: d.id,
         name: d.document_name,
         hash: d.document_hash || 'N/A',
         created: d.created_at?.split('T')[0] || '',
-        status: d.document_hash ? 'Signed' : 'Pending',
+        status: 'Signed',
         signedUrl: d.signed_document_url || null,
       })));
     } catch (error: any) {
-      setHistory([]);
+      if (mountedRef.current) setHistory([]);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 

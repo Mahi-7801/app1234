@@ -9,6 +9,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  Linking,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -28,11 +29,15 @@ import SessionManager from '../services/SessionManager';
 const SecureDocumentScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { documentUrl, documentName, documentType } = route.params as {
+  const params = route.params as {
     documentUrl: string;
     documentName: string;
     documentType: string;
-  };
+  } | undefined;
+
+  const documentUrl = params?.documentUrl || '';
+  const documentName = (params?.documentName || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const documentType = params?.documentType || 'Document';
 
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -127,8 +132,6 @@ const SecureDocumentScreen = () => {
           Alert.alert('Error', 'Failed to download document');
         }
       } else {
-        // Fallback: open in browser
-        const { Linking } = require('react-native');
         await Linking.openURL(documentUrl);
       }
     } catch (error: any) {
@@ -141,7 +144,7 @@ const SecureDocumentScreen = () => {
   const handleKeyPress = (key: string) => {
     if (key === 'backspace') {
       setPin(pin.slice(0, -1));
-    } else if (pin.length < 12) {
+    } else if (pin.length < 8) {
       setPin(pin + key);
     }
   };

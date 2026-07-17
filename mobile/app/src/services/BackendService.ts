@@ -1,9 +1,20 @@
-import * as Crypto from 'expo-crypto';
-
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-v2.onrender.com';
+
+const FETCH_TIMEOUT = 15000;
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 class BackendService {
   private static _currentUserId: string | null = null;
+  private static _authToken: string | null = null;
 
   static setCurrentUserId(id: string | null) {
     BackendService._currentUserId = id;
@@ -13,16 +24,29 @@ class BackendService {
     return BackendService._currentUserId;
   }
 
+  static setAuthToken(token: string | null) {
+    BackendService._authToken = token;
+  }
+
+  private static getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (BackendService._authToken) {
+      headers['Authorization'] = `Bearer ${BackendService._authToken}`;
+    }
+    return headers;
+  }
+
   // ── Signup ──
-  static async signup(email: string, _password: string, _fullName: string): Promise<{ user: any }> {
+  static async signup(email: string, password: string, fullName: string): Promise<{ user: any }> {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/signup`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, password, full_name: fullName }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Signup failed');
+      if (data.token) BackendService._authToken = data.token;
       return { user: data.user };
     } catch (error) {
       if (__DEV__) {
@@ -34,16 +58,16 @@ class BackendService {
   }
 
   // ── Login ──
-  static async login(email: string, _password: string): Promise<{ user: any }> {
+  static async login(email: string, password: string): Promise<{ user: any }> {
     try {
-      // For demo: lookup user by email (in production use Supabase Auth)
-      const res = await fetch(`${BACKEND_URL}/api/signup`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (data.token) BackendService._authToken = data.token;
       return { user: data.user };
     } catch (error) {
       if (__DEV__) {
@@ -64,9 +88,9 @@ class BackendService {
     const storagePath = `${userId}/${Date.now()}_${fileName}`;
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/documents`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/documents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
         body: JSON.stringify({
           user_id: userId,
           document_name: fileName,
@@ -89,9 +113,9 @@ class BackendService {
   // ── Hash Document ──
   static async hashDocument(documentId: string): Promise<{ hash: string }> {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/documents/${documentId}/hash`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/documents/${encodeURIComponent(documentId)}/hash`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Hash failed');
@@ -111,9 +135,11 @@ class BackendService {
     if (!userId) return [];
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/documents/${userId}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/documents/${encodeURIComponent(userId)}`, {
+        headers: BackendService.getAuthHeaders(),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch documents');
       return data;
     } catch (error) {
       if (__DEV__) {
@@ -135,9 +161,9 @@ class BackendService {
     const userId = BackendService.getCurrentUserId() || 'anonymous';
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/signing-sessions`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/signing-sessions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
         body: JSON.stringify({
           user_id: userId,
           document_id: params.documentId,
@@ -148,7 +174,7 @@ class BackendService {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Failed to record session');
       return { sessionId: data.id };
     } catch (error) {
       if (__DEV__) {
@@ -171,9 +197,9 @@ class BackendService {
     const userId = BackendService.getCurrentUserId() || 'anonymous';
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/audit-logs`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/audit-logs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
         body: JSON.stringify({
           user_id: userId,
           event_type: auditData.eventType,
@@ -187,7 +213,7 @@ class BackendService {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Failed to log audit');
       return { auditId: data.id };
     } catch (error) {
       if (__DEV__) {
@@ -206,9 +232,9 @@ class BackendService {
     certificateSerial: string;
   }): Promise<{ signedDocumentUrl: string }> {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/assemble-signature`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/assemble-signature`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
         body: JSON.stringify({
           documentId: params.documentId,
           signature: params.signature,
@@ -217,7 +243,7 @@ class BackendService {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Failed to assemble signature');
       return { signedDocumentUrl: data.signedDocumentUrl };
     } catch (error) {
       if (__DEV__) {
@@ -235,9 +261,9 @@ class BackendService {
     documentHash?: string;
   }): Promise<{ valid: boolean; reason: string; certificateSerial: string; timestamp: string }> {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/verify-signature`, {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/verify-signature`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: BackendService.getAuthHeaders(),
         body: JSON.stringify({
           documentId: params.documentId,
           signature: params.signature,
@@ -245,7 +271,7 @@ class BackendService {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Verification failed');
       return data;
     } catch (error) {
       if (__DEV__) {
@@ -259,9 +285,11 @@ class BackendService {
   // ── Get Signing Sessions ──
   static async getSigningSessions(userId: string): Promise<any[]> {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/signing-sessions/user/${userId}`);
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/signing-sessions/user/${encodeURIComponent(userId)}`, {
+        headers: BackendService.getAuthHeaders(),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch sessions');
       return data;
     } catch (error) {
       if (__DEV__) {
@@ -271,9 +299,29 @@ class BackendService {
     }
   }
 
+  // ── Submit Timestamp ──
+  static async submitTimestamp(signature: string, documentHash: string): Promise<{ timestamp: string; certificateSerial: string }> {
+    try {
+      const res = await fetchWithTimeout(`${BACKEND_URL}/api/submit-timestamp`, {
+        method: 'POST',
+        headers: BackendService.getAuthHeaders(),
+        body: JSON.stringify({ signature, documentHash }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Timestamp failed');
+      return { timestamp: data.timestamp, certificateSerial: data.certificateSerial };
+    } catch (error) {
+      if (__DEV__) {
+        return { timestamp: new Date().toISOString(), certificateSerial: 'MOCK-CERT' };
+      }
+      throw error;
+    }
+  }
+
   // ── Logout ──
   static logout() {
     BackendService._currentUserId = null;
+    BackendService._authToken = null;
   }
 }
 

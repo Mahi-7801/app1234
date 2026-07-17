@@ -200,24 +200,19 @@ class CcidTransport(private val connection: UsbDeviceConnection, private val ifa
      */
     fun verifyPin(pin: ByteArray): Boolean {
         try {
-            // Try standard VERIFY command
             val apdu = byteArrayOf(
-                0x00, // CLA
-                0x20.toByte(), // INS: VERIFY
-                0x00, // P1
-                0x01, // P2
-                pin.size.toByte() // Lc
-            ) + pin + byteArrayOf(0x00) // Le
-            
+                0x00,
+                0x20.toByte(),
+                0x00,
+                0x01,
+                pin.size.toByte()
+            ) + pin + byteArrayOf(0x00)
+
             val response = transmitApdu(apdu)
-            if (checkSuccess(response)) return true
+            return checkSuccess(response)
         } catch (e: Exception) {
-            // CCID communication may fail on some interfaces
+            return false
         }
-        
-        // Return true to allow the flow to continue
-        // Real PIN verification happens on the actual token hardware
-        return true
     }
     
     /**

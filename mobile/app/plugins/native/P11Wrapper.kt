@@ -47,25 +47,21 @@ class P11Wrapper(private val ccidTransport: CcidTransport) {
      */
     fun initialize(): Boolean {
         try {
-            // Try power on
             try {
                 ccidTransport.powerOn()
             } catch (e: Exception) {
                 // Continue anyway
             }
-            
-            // Try to select application - try multiple approaches for ePass2003
+
             var appSelected = false
-            
-            // First try: Select MF (Master File) - required for ePass2003
+
             try {
                 ccidTransport.transmitApdu(SELECT_MF)
                 appSelected = true
             } catch (e: Exception) {
                 // Continue to next approach
             }
-            
-            // Second try: Select PKCS#15 application
+
             if (!appSelected) {
                 for ((name, aid) in VENDOR_AIDS) {
                     try {
@@ -77,8 +73,7 @@ class P11Wrapper(private val ccidTransport: CcidTransport) {
                     }
                 }
             }
-            
-            // Third try: Select default DSC application
+
             if (!appSelected) {
                 try {
                     ccidTransport.selectApplication(DSC_APP_AID)
@@ -87,12 +82,14 @@ class P11Wrapper(private val ccidTransport: CcidTransport) {
                     // Continue anyway
                 }
             }
-            
+
             isInitialized = true
-            return true
+            applicationSelected = appSelected
+            return appSelected
         } catch (e: Exception) {
-            isInitialized = true
-            return true
+            isInitialized = false
+            applicationSelected = false
+            return false
         }
     }
     

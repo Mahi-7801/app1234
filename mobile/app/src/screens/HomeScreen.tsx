@@ -108,9 +108,13 @@ const HomeScreen = () => {
 
   const handleOpenDocs = async () => {
     const url = 'https://docs.expo.dev/develop/development-builds/introduction/';
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      await Linking.openURL(url);
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      // Silently fail if unable to open URL
     }
   };
 

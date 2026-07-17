@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import BackendService from '../services/BackendService';
+import SessionManager from '../services/SessionManager';
 
 const LoginScreen = () => {
   const navigation = useNavigation<any>();
@@ -26,11 +27,18 @@ const LoginScreen = () => {
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await BackendService.login(email, password);
       if (result.user) {
         BackendService.setCurrentUserId(result.user.id);
+        SessionManager.validateSession();
         navigation.reset({
           index: 0,
           routes: [{ name: 'MainTabs' }],

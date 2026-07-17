@@ -84,10 +84,13 @@ const SignConfirmationScreen = () => {
   const [auditId, setAuditId] = useState<string | null>(null);
   const [assembleResult, setAssembleResult] = useState<any>(null);
   const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [finishLoading, setFinishLoading] = useState(false);
 
   const handleFinish = async () => {
+    if (!signatureResult) return;
+
+    setFinishLoading(true);
     try {
-      // Record signing session in 'signing_sessions' table
       const sessionResult = await BackendService.recordSigningSession({
         documentId: document.id,
         certificateSerialNumber: signatureResult.certificateSerial,
@@ -96,7 +99,6 @@ const SignConfirmationScreen = () => {
         timestampToken: signatureResult.timestamp,
       });
 
-      // Assemble PAdES signature
       const assembled = await BackendService.assembleSignature({
         documentId: document.id,
         signature: signatureResult.signature,
@@ -105,7 +107,6 @@ const SignConfirmationScreen = () => {
       });
       setAssembleResult(assembled);
 
-      // CCA Rule 5: Log audit trail in 'audit_logs' table
       const auditResult = await BackendService.logAudit({
         eventType: 'document_signed',
         documentId: document.id,
@@ -116,7 +117,6 @@ const SignConfirmationScreen = () => {
       });
       setAuditId(auditResult.auditId);
 
-      // Verify the signature
       const verified = await BackendService.verifySignature({
         documentId: document.id,
         signature: signatureResult.signature,
@@ -125,7 +125,9 @@ const SignConfirmationScreen = () => {
       setVerificationResult(verified);
 
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to log audit trail');
+      Alert.alert('Error', error.message || 'Failed to complete signing process');
+    } finally {
+      setFinishLoading(false);
     }
   };
 
@@ -262,9 +264,9 @@ const SignConfirmationScreen = () => {
           </View>
 
           {!auditId ? (
-            <TouchableOpacity style={styles.finishButton} onPress={handleFinish} disabled={loading}>
+            <TouchableOpacity style={styles.finishButton} onPress={handleFinish} disabled={finishLoading}>
               <Text style={styles.finishButtonText}>
-                {loading ? 'Processing...' : 'Finish & Log Audit'}
+                {finishLoading ? 'Processing...' : 'Finish & Log Audit'}
               </Text>
             </TouchableOpacity>
           ) : (

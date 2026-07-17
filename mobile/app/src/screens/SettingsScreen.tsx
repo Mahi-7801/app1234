@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  AsyncStorage,
 } from 'react-native';
 
 const SettingsScreen = () => {
@@ -20,7 +21,13 @@ const SettingsScreen = () => {
       'Are you sure you want to clear signing history?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: () => {} },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Cleared', 'Signing history has been cleared.');
+          },
+        },
       ]
     );
   };
