@@ -52,17 +52,22 @@ const SignConfirmationScreen = () => {
 
     try {
       // CCA Rule 1: Sign the hash using hardware token
-      // If native module is unavailable (demo mode), generate a mock signature
-      let signature;
-      if (DSCService.isNativeModuleAvailable()) {
-        signature = await DSCService.sign(documentHash, 'SHA256WithRSA');
-      } else {
-        // Demo mode: generate a mock signature for hackathon presentation
-        const mockSig = `DEMO-SIG-${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
-        signature = { signature: mockSig, algorithm: 'SHA256WithRSA' };
-      }
+      const signature = await DSCService.sign(documentHash, 'SHA256WithRSA');
 
       setStep('timestamping');
+
+      // CCA Rule 1: Get certificate from token to extract serial number
+      let certificateSerial = 'UNKNOWN';
+      try {
+        const cert = await DSCService.getCertificate();
+        if (cert?.certificate) {
+          // Extract serial from the certificate hex (simplified: use last 16 hex chars)
+          const certHex = cert.certificate;
+          certificateSerial = certHex.substring(certHex.length - 32);
+        }
+      } catch {
+        // Certificate read failed — continue without serial
+      }
 
       // CCA Rule 3: Submit for RFC 3161 timestamp
       const timestampResult = await BackendService.submitTimestamp(
@@ -75,7 +80,7 @@ const SignConfirmationScreen = () => {
       setSignatureResult({
         signature: signature.signature,
         timestamp: timestampResult.timestamp,
-        certificateSerial: timestampResult.certificateSerial,
+        certificateSerial: certificateSerial,
       });
 
     } catch (error: any) {

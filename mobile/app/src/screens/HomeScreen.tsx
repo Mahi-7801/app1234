@@ -297,12 +297,16 @@ const HomeScreen = () => {
           )}
 
           {!connectedDevice && !loading && tokens.length === 0 && (
-            <TouchableOpacity
-              style={[styles.signButton, { backgroundColor: '#FF9500' }]}
-              onPress={() => navigation.navigate('DocumentSelect' as never)}
-            >
-              <Text style={styles.signButtonText}>Demo Mode - Select Document</Text>
-            </TouchableOpacity>
+            <View style={styles.noDevices}>
+              <Text style={styles.noDevicesIcon}>🔌</Text>
+              <Text style={styles.noDevicesText}>No DSC dongles detected</Text>
+              <Text style={styles.hint}>
+                Please connect a Type-C DSC dongle via USB OTG cable.
+              </Text>
+              <Text style={styles.hint}>
+                Make sure the dongle is properly plugged in and try scanning again.
+              </Text>
+            </View>
           )}
         </>
       )}

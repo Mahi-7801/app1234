@@ -63,14 +63,7 @@ const SecureDocumentScreen = () => {
     setLoading(true);
     try {
       // CCA Rule 2: PIN is sent directly to hardware token
-      // In demo mode (no native module), auto-verify
-      let result = false;
-      if (DSCService.isNativeModuleAvailable()) {
-        result = await DSCService.verifyPin(pin);
-      } else {
-        // Demo mode: accept any 4+ digit PIN
-        result = true;
-      }
+      const result = await DSCService.verifyPin(pin);
 
       // Clear PIN from memory immediately
       setPin('');
