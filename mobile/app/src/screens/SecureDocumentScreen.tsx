@@ -151,6 +151,40 @@ const SecureDocumentScreen = () => {
 
   // If already verified, show download button
   if (verified) {
+    // If no document URL, show an error with a way to go back
+    if (!documentUrl) {
+      return (
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.lockIcon}>🔓</Text>
+            <Text style={styles.title}>Document Ready</Text>
+            <Text style={styles.subtitle}>
+              Your PIN has been verified. However, the signed document URL is not available.
+            </Text>
+          </View>
+
+          <View style={styles.documentInfo}>
+            <Text style={styles.documentName}>{documentName}</Text>
+            <Text style={styles.documentType}>{documentType}</Text>
+          </View>
+
+          <View style={[styles.securityInfo, { backgroundColor: '#FFF0F0', borderColor: '#FF3B30', borderWidth: 1 }]}>
+            <Text style={[styles.securityTitle, { color: '#FF3B30' }]}>Error</Text>
+            <Text style={[styles.securityText, { color: '#FF3B30' }]}>
+              Document URL not available. The signed document may not have been generated. Please try signing again.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -259,7 +293,14 @@ const SecureDocumentScreen = () => {
         style={styles.cancelButton}
         onPress={() => {
           setPin('');
-          navigation.goBack();
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            });
+          }
         }}
       >
         <Text style={styles.cancelButtonText}>Cancel</Text>

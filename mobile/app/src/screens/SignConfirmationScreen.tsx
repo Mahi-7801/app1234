@@ -39,11 +39,8 @@ const SignConfirmationScreen = () => {
     React.useCallback(() => {
       // Check if session is still valid
       if (!SessionManager.isSessionValid()) {
-        // Session expired - navigate to PIN entry for re-verification
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'PINEntry', params: { reVerify: true } }],
-        });
+        // Session expired — re-enter PIN instead of resetting to MainTabs
+        navigation.navigate('PINEntry', { reVerify: true });
         return;
       }
     }, [])
@@ -274,9 +271,13 @@ const SignConfirmationScreen = () => {
               <TouchableOpacity
                 style={styles.finishButton}
                 onPress={() => {
+                  if (!assembleResult?.signedDocumentUrl) {
+                    Alert.alert('Error', 'Signed document URL not available. Please try again.');
+                    return;
+                  }
                   // Navigate to secure document screen for PIN verification before download
                   navigation.navigate('SecureDocument', {
-                    documentUrl: assembleResult?.signedDocumentUrl || '',
+                    documentUrl: assembleResult.signedDocumentUrl,
                     documentName: document.name || 'Signed Document',
                     documentType: 'PDF Document',
                   });

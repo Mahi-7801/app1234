@@ -326,6 +326,44 @@ app.get('/api/audit-logs/:userId', requireAuth, async (req, res) => {
   res.json(data);
 });
 
+// ── Submit Timestamp (RFC 3161) ──
+app.post('/api/submit-timestamp', requireAuth, async (req, res) => {
+  const { signature, documentHash } = req.body;
+  if (!signature || !documentHash) {
+    return res.status(400).json({ error: 'signature and documentHash are required' });
+  }
+
+  try {
+    // Generate a timestamp token (in production, query an actual TSA)
+    const timestampToken = crypto.createHash('sha256')
+      .update(`${signature}:${documentHash}:${Date.now()}`)
+      .digest('hex');
+
+    // Get the certificate serial from the signing session if available
+    let certificateSerial = 'UNKNOWN';
+    const { data: session } = await supabase
+      .from('signing_sessions')
+      .select('certificate_serial_number')
+      .eq('signed_hash', documentHash)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (session?.certificate_serial_number) {
+      certificateSerial = session.certificate_serial_number;
+    }
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      timestampToken,
+      certificateSerial,
+    });
+  } catch (error) {
+    console.error('[Timestamp] Error:', error.message);
+    res.status(500).json({ error: 'Failed to generate timestamp' });
+  }
+});
+
 // ── Assemble PAdES Signature ──
 app.post('/api/assemble-signature', requireAuth, async (req, res) => {
   const { documentId, signature, timestamp, certificateSerial } = req.body;

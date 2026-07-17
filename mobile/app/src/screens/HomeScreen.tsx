@@ -28,13 +28,18 @@ const HomeScreen = () => {
   const [nativeModuleAvailable, setNativeModuleAvailable] = useState(true);
   const [showDongleAlert, setShowDongleAlert] = useState(false);
 
+  // Check if user is logged in
+  const isLoggedIn = !!BackendService.getCurrentUserId();
+
   useEffect(() => {
     setNativeModuleAvailable(DSCService.isNativeModuleAvailable());
   }, []);
 
-  // Only register USB listeners and scan when this screen is focused
+  // Only register USB listeners and scan when this screen is focused AND user is logged in
   useFocusEffect(
     React.useCallback(() => {
+      // Don't scan for dongle if user is not logged in
+      if (!isLoggedIn) return;
       if (!DSCService.isNativeModuleAvailable()) return;
 
       let scanTimeout: ReturnType<typeof setTimeout>;
@@ -61,7 +66,7 @@ const HomeScreen = () => {
         connectListener?.remove();
         disconnectListener?.remove();
       };
-    }, [])
+    }, [isLoggedIn])
   );
 
   const scanForTokens = async () => {
@@ -89,10 +94,18 @@ const HomeScreen = () => {
   };
 
   const handleConnect = async (serialNumber: string) => {
+    // Don't allow dongle connection without login
+    if (!BackendService.getCurrentUserId()) {
+      Alert.alert('Login Required', 'Please log in before connecting to a DSC dongle.');
+      navigation.navigate('Login' as never);
+      return;
+    }
+
     setLoading(true);
     try {
       await DSCService.connectDevice(serialNumber);
-      SessionManager.invalidateSession();
+      // Do NOT invalidate session here — PIN verification on the token
+      // is separate from the app session. Session stays valid after scan.
       navigation.navigate('PINEntry' as never);
     } catch (error: any) {
       Alert.alert('Connection Error', error.message || 'Failed to connect');
@@ -178,6 +191,47 @@ const HomeScreen = () => {
   }
 
   // Normal scan screen when native module is available
+  // If user is not logged in, show login prompt instead of dongle data
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoIcon}>
+            <Text style={styles.logoIconText}>🛡️</Text>
+          </View>
+          <Text style={styles.logoTitle}>SECURESIGN</Text>
+          <Text style={styles.logoTagline}>Innovate • Integrate • Sign Secure</Text>
+        </View>
+
+        <View style={styles.noDevices}>
+          <Text style={styles.noDevicesIcon}>🔒</Text>
+          <Text style={styles.noDevicesText}>Login Required</Text>
+          <Text style={styles.hint}>
+            Please log in to your account before connecting the DSC dongle.
+          </Text>
+          <Text style={styles.hint}>
+            Your identity must be verified before accessing digital signature features.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.scanButton}
+          onPress={() => navigation.navigate('Login' as never)}
+        >
+          <Text style={styles.scanButtonText}>Go to Login</Text>
+        </TouchableOpacity>
+
+        <View style={styles.complianceInfo}>
+          <Text style={styles.complianceTitle}>CCA Compliance</Text>
+          <Text style={styles.complianceText}>
+            This app ensures private keys never leave your hardware token.
+            Login is required to maintain a secure audit trail.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>

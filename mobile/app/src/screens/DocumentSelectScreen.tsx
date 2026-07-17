@@ -30,11 +30,11 @@ const DocumentSelectScreen = () => {
 
   useFocusEffect(
     React.useCallback(() => {
+      mountedRef.current = true;
+
       if (!SessionManager.isSessionValid()) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'PINEntry', params: { reVerify: true } }],
-        });
+        // Session expired — go to PINEntry for re-verification, not MainTabs
+        navigation.navigate('PINEntry', { reVerify: true });
         return;
       }
 

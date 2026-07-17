@@ -6,25 +6,19 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Bundle
 
+/**
+ * CCA Rule 2: USB device connection handler.
+ * Does NOT forward device data to MainActivity — dongle data is only
+ * shown after the user has logged in and is on the HomeScreen.
+ */
 class UsbDeviceActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-        }
-        
-        val mainIntent = Intent(this, com.securesign.app.MainActivity::class.java).apply {
-            action = "USB_DEVICE_ATTACHED"
-            putExtra("vendorId", device?.vendorId ?: 0)
-            putExtra("productId", device?.productId ?: 0)
-            putExtra("deviceName", device?.deviceName ?: "")
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        startActivity(mainIntent)
+
+        // Do NOT start MainActivity with device data here.
+        // The HomeScreen's USB listener will detect the dongle
+        // only after the user has logged in.
+        // This prevents showing dongle data to unauthenticated users.
         finish()
     }
 }

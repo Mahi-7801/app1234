@@ -13,7 +13,7 @@ class SessionManager {
   private static _instance: SessionManager;
   private static _sessionValid: boolean = false;
   private static _lastActivityTime: number = Date.now();
-  private static _sessionTimeout: number = 30000; // 30 seconds timeout
+  private static _sessionTimeout: number = 300000; // 5 minutes timeout
   private static _appStateSubscription: any = null;
   private static _onSessionInvalidated: (() => void) | null = null;
 
