@@ -118,7 +118,7 @@ function withDSCSigningManifest(config) {
     // Add UsbDeviceActivity
     const application = manifest.application?.[0];
     if (application) {
-      const existingActivity = activity?.activity?.find(
+      const existingActivity = application.activity?.find(
         (a) => a.$['android:name'] === '.UsbDeviceActivity' || 
                a.$['android:name'] === 'com.dscsigning.app.UsbDeviceActivity'
       );
