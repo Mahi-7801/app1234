@@ -189,7 +189,10 @@ app.post('/api/documents', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: 'Failed to create document' });
+  if (error) {
+    console.error('[Documents] Insert error:', error.message, error.details, error.hint);
+    return res.status(500).json({ error: 'Failed to create document', details: error.message });
+  }
   res.json(data);
 });
 
@@ -262,7 +265,10 @@ app.post('/api/signing-sessions', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: 'Failed to record session' });
+  if (error) {
+    console.error('[SigningSessions] Insert error:', error.message, error.details, error.hint);
+    return res.status(500).json({ error: 'Failed to record session', details: error.message });
+  }
   res.json(data);
 });
 
@@ -285,7 +291,10 @@ app.post('/api/audit-logs', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: 'Failed to log audit' });
+  if (error) {
+    console.error('[AuditLogs] Insert error:', error.message, error.details, error.hint);
+    return res.status(500).json({ error: 'Failed to log audit', details: error.message });
+  }
   res.json(data);
 });
 
