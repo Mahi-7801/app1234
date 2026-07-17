@@ -86,7 +86,7 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  // Check if user already exists
+  // Check if user already exists in users table
   const { data: existing } = await supabase
     .from('users')
     .select('*')
@@ -108,39 +108,35 @@ app.post('/api/signup', rateLimit(60000, 10), async (req, res) => {
     return res.status(500).json({ error: 'Failed to create account' });
   }
 
-  // Wait briefly for the trigger to auto-create the profile
-  await new Promise(resolve => setTimeout(resolve, 500));
+  const authUserId = authData.user.id;
 
-  // Fetch the user profile (may have been auto-created by trigger)
-  let { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authData.user.id)
-    .single();
+  // Poll for the trigger-created profile (up to 2 seconds)
+  let userProfile = null;
+  for (let i = 0; i < 10; i++) {
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUserId)
+      .single();
+    if (data) {
+      userProfile = data;
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
 
   // If trigger didn't create it, insert manually
   if (!userProfile) {
-    const { data: inserted, error: insertErr } = await supabase
+    const { data: inserted } = await supabase
       .from('users')
-      .insert({ id: authData.user.id, email, full_name: full_name || '' })
+      .insert({ id: authUserId, email, full_name: full_name || '' })
       .select()
       .single();
-
-    if (insertErr) {
-      // If insert also fails (e.g., race condition with trigger), just fetch again
-      const { data: retry } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-      userProfile = retry;
-    } else {
-      userProfile = inserted;
-    }
+    userProfile = inserted;
   }
 
   res.json({
-    user: userProfile || { id: authData.user.id, email: authData.user.email },
+    user: userProfile || { id: authUserId, email },
     token: authData.session?.access_token || null,
   });
 });
@@ -161,14 +157,25 @@ app.post('/api/login', rateLimit(60000, 15), async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const { data: userProfile } = await supabase
+  // Ensure user profile exists in users table
+  let { data: userProfile } = await supabase
     .from('users')
     .select('*')
     .eq('id', data.user.id)
     .single();
 
+  if (!userProfile) {
+    // Create profile if it doesn't exist
+    const { data: inserted } = await supabase
+      .from('users')
+      .insert({ id: data.user.id, email: data.user.email, full_name: '' })
+      .select()
+      .single();
+    userProfile = inserted || { id: data.user.id, email: data.user.email };
+  }
+
   res.json({
-    user: userProfile || { id: data.user.id, email: data.user.email },
+    user: userProfile,
     token: data.session.access_token,
   });
 });
