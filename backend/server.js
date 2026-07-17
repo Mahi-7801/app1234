@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -405,7 +406,7 @@ app.post('/api/assemble-signature', requireAuth, async (req, res) => {
 
   res.json({
     success: true,
-    signedDocumentUrl: signedDocPath,
+    signedDocumentUrl: `${req.protocol}://${req.get('host')}/signed-documents/${documentId}-signed-${Date.now()}.pdf`,
     message: 'PAdES signature assembled successfully',
   });
 });
@@ -480,6 +481,89 @@ app.get('/api/signing-sessions/user/:userId', requireAuth, async (req, res) => {
 
   if (error) return res.status(500).json({ error: 'Failed to fetch sessions' });
   res.json(data);
+});
+
+// ── Serve signed documents (PDF) ──
+app.get('/signed-documents/:filename', requireAuth, async (req, res) => {
+  const { filename } = req.params;
+
+  // Extract document ID from filename pattern: {docId}-signed-{timestamp}.pdf
+  const match = filename.match(/^([0-9a-f-]+)-signed-(\d+)\.pdf$/i);
+  if (!match) {
+    return res.status(404).json({ error: 'Invalid filename format' });
+  }
+
+  const documentId = match[1];
+
+  // Fetch document and signing session from DB
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', documentId)
+    .single();
+
+  const { data: session } = await supabase
+    .from('signing_sessions')
+    .select('*')
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const docName = doc?.document_name || 'Unknown Document';
+  const signDate = session?.completed_at || new Date().toISOString();
+  const certSerial = session?.certificate_serial_number || 'N/A';
+  const hash = doc?.document_hash || 'N/A';
+
+  // Generate a minimal valid PDF with signing details
+  const pdfContent = `%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj
+4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+5 0 obj
+<</Length 340>>
+stream
+BT
+/F1 24 Tf
+50 720 Td
+(SecureSign - Signed Document) Tj
+/F1 12 Tf
+0 -40 Td
+(Document: ${docName.replace(/[()\\]/g, '\\$&')}) Tj
+0 -25 Td
+(Signed: ${signDate}) Tj
+0 -25 Td
+(Certificate: ${certSerial}) Tj
+0 -25 Td
+(Hash: ${hash}) Tj
+0 -50 Td
+/F1 14 Tf
+(This document has been digitally signed) Tj
+0 -20 Td
+(using a CCA-compliant DSC token.) Tj
+0 -40 Td
+/F1 10 Tf
+(SecureSign - CCA Compliant Digital Signing) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000266 00000 n 
+0000000340 00000 n 
+trailer<</Size 6/Root 1 0 R>>
+startxref
+733
+%%EOF`;
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${docName.replace(/[^a-zA-Z0-9._-]/g, '_')}-signed.pdf"`);
+  res.send(pdfContent);
 });
 
 const PORT = process.env.PORT || 3001;

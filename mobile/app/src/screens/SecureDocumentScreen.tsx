@@ -106,15 +106,20 @@ const SecureDocumentScreen = () => {
 
     setDownloading(true);
     try {
+      // Build full URL: if documentUrl is a relative path, prepend the backend URL
+      const fullUrl = documentUrl.startsWith('http')
+        ? documentUrl
+        : `https://securesign-backend-v2.onrender.com${documentUrl}`;
+
       // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
-      
+
       if (isAvailable) {
         // Download the file first
         const fileUri = FileSystem.cacheDirectory + documentName;
-        
+
         const downloadResult = await FileSystem.downloadAsync(
-          documentUrl,
+          fullUrl,
           fileUri
         );
 
@@ -125,14 +130,14 @@ const SecureDocumentScreen = () => {
             dialogTitle: `Open ${documentName}`,
             UTI: 'com.adobe.pdf',
           });
-          
+
           // Log download for audit trail
           console.log(`[SecureDocument] Document downloaded: ${documentName} at ${new Date().toISOString()}`);
         } else {
-          Alert.alert('Error', 'Failed to download document');
+          Alert.alert('Error', `Failed to download document (status ${downloadResult.status})`);
         }
       } else {
-        await Linking.openURL(documentUrl);
+        await Linking.openURL(fullUrl);
       }
     } catch (error: any) {
       Alert.alert('Download Error', error.message || 'Failed to download document');
