@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-v2.onrender.com';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-j1bk.onrender.com';
 
 // Fast 5-second timeout for snappy app responsiveness
 const FETCH_TIMEOUT = 5000;

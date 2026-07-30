@@ -107,10 +107,10 @@ const SecureDocumentScreen = () => {
 
     setDownloading(true);
     try {
-      // Build full URL: if documentUrl is a relative path, prepend the backend URL
+      const backendBaseUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'https://securesign-backend-j1bk.onrender.com';
       const fullUrl = documentUrl.startsWith('http')
         ? documentUrl
-        : `https://securesign-backend-v2.onrender.com${documentUrl}`;
+        : `${backendBaseUrl}${documentUrl}`;
 
       // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
