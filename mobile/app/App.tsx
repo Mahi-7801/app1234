@@ -87,10 +87,10 @@ const App = () => {
           currentRoute.name !== 'Signup' &&
           currentRoute.name !== 'PINEntry') {
         
-        // Navigate to PINEntry to re-verify
+        // Navigate to Home (MainTabs) so user can reconnect dongle first
         navigationRef.current.reset({
           index: 0,
-          routes: [{ name: 'PINEntry' }],
+          routes: [{ name: 'MainTabs' }],
         });
       }
     }

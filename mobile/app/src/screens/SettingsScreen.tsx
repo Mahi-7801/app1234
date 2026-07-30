@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  AsyncStorage,
 } from 'react-native';
 
 const SettingsScreen = () => {

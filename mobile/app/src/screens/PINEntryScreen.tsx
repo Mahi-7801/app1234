@@ -22,7 +22,7 @@ import SessionManager from '../services/SessionManager';
  */
 const PINEntryScreen = () => {
   const navigation = useNavigation<any>();
-  const route = useRoute();
+  const route = useRoute<any>();
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState(0);
